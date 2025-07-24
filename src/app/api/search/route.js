@@ -24,7 +24,7 @@ export async function POST(request) {
         'Authorization': `Bearer ${apiToken}`,
       },
       body: JSON.stringify({
-        debug: false,
+        debug: true,
         view_prompts: false,
         queries: [query],
       }),

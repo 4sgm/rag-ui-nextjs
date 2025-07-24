@@ -13,7 +13,19 @@ This is a [Next.js](https://nextjs.org/) project built using [`create-next-app`]
 - ```ragPipelineResponse.js``` - Classes describing how we map the data.
 - ```ragUtils.js``` - A mini utility function that combines the answer from the JSON response with the references.
 
-Here's the project structure:
+
+## Multiple Apps: Main & Searchbox
+
+This project now contains two separate apps:
+
+- **Main app**: Located in `src/app/` (default entry at `/`)
+- **Searchbox app**: Located in `src/searchbox/` (entry at `/searchbox`)
+
+Both apps share the same API, which is implemented in `src/app/api/search/route.js`.
+
+To access the Searchbox app, open [http://localhost:3000/searchbox](http://localhost:3000/searchbox) in your browser.
+
+Here's the updated project structure:
 
 ```
 src
@@ -25,10 +37,15 @@ src
 │   ├── globals.css
 │   ├── layout.js
 │   └── page.js
+├── searchbox
+│   ├── page.js
+│   ├── layout.js
+│   ├── searchbox.css
+│   └── app.js
 ├── lib
 │   └── ragPipelineResponse.js
 └── utils
-    └── ragUtils.js
+  └── ragUtils.js
 ```
 
 ## Dependencies
