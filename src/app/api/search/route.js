@@ -24,7 +24,7 @@ export async function POST(request) {
         'Authorization': `Bearer ${apiToken}`,
       },
       body: JSON.stringify({
-        debug: false,
+        debug: true,
         view_prompts: false,
         queries: [query],
       }),
@@ -38,6 +38,14 @@ export async function POST(request) {
     const data = await res.json();
 
     console.log(`${__filename}: Response Data:\n`, data);
+    // Log answers and documents for each result
+    if (data && data.results && Array.isArray(data.results)) {
+      data.results.forEach((result, idx) => {
+        console.log(`Result #${idx + 1} - Query:`, result.query);
+        console.log(`  Answers:`, JSON.stringify(result.answers, null, 2));
+        console.log(`  Documents:`, JSON.stringify(result.documents, null, 2));
+      });
+    }
     // Create a RagPipelineResponse object from the API response
     const ragResponse = new RagPipelineResponse(data);
 
