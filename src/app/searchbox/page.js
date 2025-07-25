@@ -1,79 +1,108 @@
 
 "use client";
 
-import React, { useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import { TextField, Button, Box, Typography, CircularProgress, Paper, InputAdornment } from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
-import { addReferences } from '@/utils/ragUtils';
+import { useState } from "react";
+import { Box, Typography, TextField, Button, CircularProgress, Paper, Grid } from "@mui/material";
+import AnswerCard from "./AnswerCard";
+import ProductCard from "./ProductCard";
 
+export default function SearchboxPage() {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState(null);
+  const [answers, setAnswers] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-
-const SearchboxPage = () => {
-  const [inputText, setInputText] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [categories, setCategories] = useState([]); // dynamic from Haystack
-  const [selectedCategory, setSelectedCategory] = useState(null);
-  const [recommendations, setRecommendations] = useState([]); // dynamic from Haystack
-  const [hasSearched, setHasSearched] = useState(false);
-
-  // Fetch categories and recommendations from Haystack API
-  const handleSubmit = async (e) => {
+  const handleSearch = async (e) => {
     e.preventDefault();
-    setIsLoading(true);
-    setError('');
-    setHasSearched(true);
-    setCategories([]);
-    setRecommendations([]);
-    setSelectedCategory(null);
+    setLoading(true);
+    setError(null);
+    setResults(null);
+    setAnswers([]);
+    setProducts([]);
     try {
-      const res = await fetch('/api/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: inputText }),
+      const res = await fetch("/api/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
       });
-      if (!res.ok) throw new Error('API error: ' + res.status);
       const data = await res.json();
-      // Expecting categories and products in the response
-      const cats = data.response.results[0].categories || [];
-      const prods = data.response.results[0].products || [];
-      setCategories(cats);
-      setRecommendations(prods);
-      if (cats.length > 0) setSelectedCategory(cats[0]);
+      setResults(data.response || data);
+
+      let foundAnswers = [];
+      let foundProducts = [];
+      if (data.response && Array.isArray(data.response.results)) {
+        data.response.results.forEach((result) => {
+          if (result.answers && Array.isArray(result.answers)) {
+            foundAnswers.push(...result.answers);
+          }
+          if (result.documents && Array.isArray(result.documents)) {
+            let header = null;
+            if (result.documents.length > 0 && result.documents[0].content) {
+              const firstLine = result.documents[0].content.split('\n')[0].replace(/\r$/, '');
+              header = firstLine.split(',');
+            }
+            result.documents.forEach((doc) => {
+              if (doc.content && header) {
+                const lines = doc.content.split('\n');
+                let rowLine = lines.length > 1 ? lines[1] : lines[0];
+                rowLine = rowLine.replace(/\r$/, '');
+                if (rowLine === header.join(',')) return;
+                const values = [];
+                let current = '';
+                let inQuotes = false;
+                for (let i = 0; i < rowLine.length; i++) {
+                  const char = rowLine[i];
+                  if (char === '"') {
+                    inQuotes = !inQuotes;
+                  } else if (char === ',' && !inQuotes) {
+                    values.push(current);
+                    current = '';
+                  } else {
+                    current += char;
+                  }
+                }
+                values.push(current);
+                const product = {};
+                header.forEach((key, idx) => {
+                  product[key] = values[idx] || '';
+                });
+                if (doc.meta) {
+                  Object.entries(doc.meta).forEach(([k, v]) => {
+                    if (!(k in product)) product[k] = v;
+                  });
+                }
+                if (product.sku && product.name) {
+                  foundProducts.push(product);
+                }
+              }
+            });
+          }
+        });
+      }
+      setAnswers(foundAnswers);
+      setProducts(foundProducts);
     } catch (err) {
-      setError('An error occurred while processing your request.');
+      setError("Search failed");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  // When a category is clicked, filter recommendations for that category
-  const handleCategoryClick = (cat) => {
-    setSelectedCategory(cat);
-    setRecommendations((prev) => prev.filter(p => p.category === cat));
-  };
-
   return (
-    <Box sx={{ background: '#f6f8fa', minHeight: '100vh', py: 6 }}>
-      <Paper elevation={3} sx={{ maxWidth: 1200, mx: 'auto', p: 4, borderRadius: 4 }}>
-        <Typography variant="h3" sx={{ mb: 2, color: '#1976d2', fontWeight: 700, letterSpacing: 1 }}>
+    <Box sx={{ maxWidth: 1000, mx: "auto", mt: 6, p: 3 }}>
+      <Paper elevation={3} sx={{ p: 4, borderRadius: 4 }}>
+        <Typography variant="h4" sx={{ mb: 3, fontWeight: 700, color: "#1976d2" }}>
           Product Search
         </Typography>
-        <form onSubmit={handleSubmit} style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 32 }}>
+        <form onSubmit={handleSearch} style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 32 }}>
           <TextField
             label="Type your product question"
-            value={inputText}
-            onChange={e => setInputText(e.target.value)}
+            value={query}
+            onChange={e => setQuery(e.target.value)}
             variant="outlined"
             fullWidth
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon color="primary" />
-                </InputAdornment>
-              ),
-            }}
             sx={{ maxWidth: 600 }}
             autoFocus
             required
@@ -82,73 +111,52 @@ const SearchboxPage = () => {
             type="submit"
             variant="contained"
             color="primary"
-            disabled={isLoading || !inputText.trim()}
+            disabled={loading || !query.trim()}
             sx={{ height: 56, minWidth: 120, fontWeight: 600 }}
           >
-            {isLoading ? <CircularProgress size={24} /> : 'Search'}
+            {loading ? <CircularProgress size={24} /> : 'Search'}
           </Button>
         </form>
         {error && (
           <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>
         )}
-        {/* Mega Menu Layout */}
-        {hasSearched && (
-          <Box sx={{ display: 'flex', gap: 4, mt: 2 }}>
-            {/* Categories */}
-            <Paper sx={{ minWidth: 220, p: 2, background: '#f4f6fb', borderRadius: 2, boxShadow: 0 }}>
-              <Typography variant="h6" sx={{ mb: 2, color: '#1976d2' }}>Categories</Typography>
-              {categories.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">No categories found.</Typography>
-              ) : (
-                categories.map(cat => (
-                  <Button
-                    key={cat}
-                    variant={cat === selectedCategory ? 'contained' : 'text'}
-                    color={cat === selectedCategory ? 'primary' : 'inherit'}
-                    onClick={() => handleCategoryClick(cat)}
-                    sx={{
-                      justifyContent: 'flex-start',
-                      width: '100%',
-                      mb: 1,
-                      fontWeight: cat === selectedCategory ? 700 : 400,
-                      background: cat === selectedCategory ? '#e3f2fd' : 'none',
-                    }}
-                  >
-                    {cat}
-                  </Button>
-                ))
-              )}
-            </Paper>
-            {/* Product Recommendations */}
-            <Box sx={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-              {isLoading ? (
-                <Box display="flex" justifyContent="center" alignItems="center" minHeight={200} width="100%">
-                  <CircularProgress size={40} />
-                </Box>
-              ) : recommendations.length === 0 ? (
-                <Typography variant="body1" color="text.secondary" align="center" sx={{ mt: 4 }}>
-                  No product recommendations found.
-                </Typography>
-              ) : (
-                recommendations.map(product => (
-                  <Paper key={product.id} sx={{ width: 260, minHeight: 340, p: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', borderRadius: 2 }}>
-                    <img src={product.image} alt={product.title} style={{ width: '100%', height: 140, objectFit: 'contain', background: '#f5f5f5', borderRadius: 8 }} />
-                    <Typography variant="subtitle1" fontWeight={600} sx={{ mt: 2 }}>{product.title}</Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{product.description}</Typography>
-                    <Typography variant="h6" color="primary">${product.price}</Typography>
-                    <Button variant="contained" color="primary" sx={{ mt: 2, width: '100%' }}>Add to Cart</Button>
-                  </Paper>
-                ))
-              )}
-            </Box>
+
+        {/* Answers Section */}
+        {answers.length > 0 && (
+          <Box sx={{ mt: 4 }}>
+            <Typography variant="h6" sx={{ mb: 2, color: '#1976d2' }}>Answers</Typography>
+            {answers.map((answer, idx) => (
+              <AnswerCard key={answer.result_id || idx} answer={answer} />
+            ))}
+          </Box>
+        )}
+
+        {/* Products Section */}
+        {products.length > 0 && (
+          <Box sx={{ mt: 4 }}>
+            <Typography variant="h6" sx={{ mb: 2, color: '#1976d2' }}>Product Recommendations</Typography>
+            <Grid container spacing={3}>
+              {products.map((product) => (
+                <Grid item xs={12} sm={6} md={4} lg={3} key={product.sku}>
+                  <ProductCard product={product} />
+                </Grid>
+              ))}
+            </Grid>
+          </Box>
+        )}
+
+        {/* Fallback if no products or answers */}
+        {results && answers.length === 0 && products.length === 0 && (
+          <Box sx={{ mt: 4 }}>
+            <Typography variant="body1" color="text.secondary">
+              No answers or product recommendations found.
+            </Typography>
+            <pre style={{ background: "#f4f4f4", padding: 12, borderRadius: 4, marginTop: 8 }}>
+              {JSON.stringify(results, null, 2)}
+            </pre>
           </Box>
         )}
       </Paper>
-      <Typography variant="caption" sx={{ color: '#888', mt: 2, display: 'block', textAlign: 'center' }}>
-        &copy; {new Date().getFullYear()} WebJaguar Product Search. Powered by RAG API.
-      </Typography>
     </Box>
   );
-};
-
-export default SearchboxPage;
+}
